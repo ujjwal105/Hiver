@@ -1,0 +1,21 @@
+{
+  "n": 10,
+  "overall_score": 60.8,
+  "min": 44.2,
+  "max": 76.0,
+  "dimension_means_1to5": {
+    "relevance": 3.9,
+    "correctness": 3.7,
+    "completeness": 3.1,
+    "tone": 5.0,
+    "actionability": 2.6
+  },
+  "category_means": {
+    "technical": 54.1,
+    "account": 67.8,
+    "feature_request": 53.6,
+    "clarification": 58.6,
+    "billing": 62.0
+  },
+  "responses_with_hallucinated_facts": 0
+}

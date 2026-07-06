@@ -1,0 +1,74 @@
+{
+  "provider": "mock",
+  "tickets_evaluated": 10,
+  "1_discrimination": {
+    "overall_pairwise_ranking_accuracy": 1.0,
+    "interpretation": "1.0 = always ranks the good reply above the degraded one; 0.5 = chance.",
+    "by_degradation_type": {
+      "truncated": {
+        "n": 10,
+        "correct": 10,
+        "ref_mean": 98.8,
+        "deg_mean": 51.7,
+        "accuracy": 1.0,
+        "separation": 47.1
+      },
+      "generic": {
+        "n": 10,
+        "correct": 10,
+        "ref_mean": 98.8,
+        "deg_mean": 38.1,
+        "accuracy": 1.0,
+        "separation": 60.7
+      },
+      "off_topic": {
+        "n": 10,
+        "correct": 10,
+        "ref_mean": 98.8,
+        "deg_mean": 57.1,
+        "accuracy": 1.0,
+        "separation": 41.7
+      },
+      "fact_error": {
+        "n": 10,
+        "correct": 10,
+        "ref_mean": 98.8,
+        "deg_mean": 77.3,
+        "accuracy": 1.0,
+        "separation": 21.5
+      }
+    }
+  },
+  "2_convergent_validity": {
+    "pearson": 0.911,
+    "spearman": 0.91,
+    "n_points": 50,
+    "interpretation": "correlation between two independent signals (LLM judge vs TF-IDF similarity); higher = the score reflects a real shared 'quality' construct."
+  },
+  "3_sensitivity": {
+    "curve": [
+      {
+        "dropped_frac": 0.0,
+        "score": 100.0
+      },
+      {
+        "dropped_frac": 0.25,
+        "score": 97.5
+      },
+      {
+        "dropped_frac": 0.5,
+        "score": 92.9
+      },
+      {
+        "dropped_frac": 0.75,
+        "score": 75.3
+      },
+      {
+        "dropped_frac": 0.9,
+        "score": 48.5
+      }
+    ],
+    "monotonic_decline": true,
+    "interpretation": "score should fall as more of the reply is removed."
+  }
+}

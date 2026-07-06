@@ -1,0 +1,4 @@
+# Core pipeline runs offline (mock provider) with only numpy.
+numpy>=1.22
+# Real LLM generation + judge (optional; needed for --provider anthropic):
+anthropic>=0.40
