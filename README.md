@@ -9,14 +9,34 @@ The evaluation system is the centre of gravity here, so most of this README is
 about *why the accuracy metric is right*, not just what it outputs.
 
 ```
-incoming email ──▶ RAG (retrieve similar past emails) ──▶ LLM ──▶ suggested reply
-                                                                      │
-                                    reference reply (gold) ──────────▶│
-                                                                      ▼
-                              multi-signal accuracy score  +  per-response "why"
-                                                                      │
-                                                                      ▼
-                              metric-validation harness: is the score trustworthy?
+ Incoming Email
+      │
+      ▼
+ Retriever  (TF-IDF default; sentence-transformers + FAISS auto-enabled if installed)
+      │
+      ▼
+ LLM Generator  (RAG few-shot; Claude, or deterministic mock offline)
+      │
+      ▼
+ Generated Reply
+      │
+      ▼
+ Evaluation Engine
+  ├── LLM-as-a-Judge   (5-dim rubric + written rationale)      weighted
+  ├── Intent Match     (does it address the actual request?)   weighted
+  ├── Tone Match       (right register for the situation?)     weighted
+  ├── Cosine Similarity to reference (TF-IDF)                  weighted
+  ├── BERTScore        (optional — auto-enabled if installed)  weighted
+  ├── Fact Carryover   (order #s, $, emails, IDs)              weighted
+  ├── Format Guardrails (greeting / sign-off / length)         weighted
+  ├── ROUGE-L                                                  diagnostic (0 wt)
+  └── BLEU                                                     diagnostic (0 wt)
+      │
+      ▼
+ Final Weighted Score (0–100) + human-readable explanation per response
+      │
+      ▼
+ Metric-Validation Harness — proves the score tracks real quality
 ```
 
 ---
@@ -97,7 +117,7 @@ similar past incoming emails (TF-IDF cosine) and show the LLM those
 |---|---|---|
 | **RAG over fine-tuning** | Small, evolving dataset; retrieval adapts instantly as tickets are added, no training run, and keeps the team's real style/policy in-context and auditable. | Prompt is longer; retrieval quality gates output quality. |
 | **RAG over plain few-shot** | Fixed few-shot wastes context on irrelevant examples; retrieval keeps exemplars on-topic. | Needs an index (cheap here). |
-| **TF-IDF retriever** | Transparent, dependency-light, runs offline; strong for short support text. | Weaker than dense embeddings on paraphrase — so the retriever is **pluggable** (swap in embeddings for a bigger corpus without touching the generator). |
+| **TF-IDF retriever by default, FAISS optional** | Transparent, dependency-light, runs offline; strong for short support text. Dense retrieval (sentence-transformers + FAISS) **auto-enables if installed** (`pip install sentence-transformers faiss-cpu`, or force with `--retriever embeddings`). | On tens of emails TF-IDF is competitive; on a real inbox (10k+ threads, heavy paraphrase) dense wins — hence identical interfaces, swap without touching the generator. We don't hard-require it: ~500MB model download would break offline-runnability. |
 
 The generation prompt explicitly instructs: address the actual request, carry
 concrete facts over correctly, take ownership, give a next step, and **never
@@ -115,15 +135,18 @@ strict** — they punish valid paraphrases and reward copying. What actually mak
 a support reply good is: it resolves the real request, it's grounded (no
 invented facts/policies), the concrete details are correct, and the tone fits.
 
-So we score with **four complementary signals**, so no single failure mode
-dominates:
+So we score with **complementary signals**, so no single failure mode dominates:
 
 | Signal | What it captures | How | Weight |
 |---|---|---|---|
-| **quality** | Semantic correctness a string metric can't see | **LLM-as-judge** rubric: relevance, correctness, completeness, tone, actionability — each 1–5 **with a written rationale**; judge sees the human reference as gold | 0.50 |
-| **similarity** | "How close to what a human actually sent" | TF-IDF cosine to the reference — an independent, deterministic anchor | 0.20 |
-| **facts** | Support lives or dies on concrete details | fact-carryover: fraction of reference facts (order #s, $, emails, IDs) correctly reproduced | 0.20 |
-| **format** | Is it a sendable email at all | deterministic guardrails: greeting + sign-off present, sensible length | 0.10 |
+| **quality** | Semantic correctness a string metric can't see | **LLM-as-judge** rubric: relevance, correctness, completeness, tone, actionability — each 1–5 **with a written rationale**; judge sees the human reference as gold | 0.40 |
+| **intent match** | Does it address the actual request? (first thing a support lead checks) | judge's relevance dimension, surfaced as its own signal | 0.10 |
+| **tone match** | Right register for the situation (apology vs. how-to vs. escalation) | judge's tone dimension, surfaced as its own signal | 0.05 |
+| **similarity** | "How close to what a human actually sent" | TF-IDF cosine to the reference — an independent, deterministic anchor | 0.15 |
+| **semantic (BERTScore)** | Embedding-level similarity, robust to paraphrase | optional: auto-enabled if `bert-score` is installed (≈1.4GB model download — not hard-required so the repo stays offline-runnable); takes 0.10 of weight from quality+similarity | 0.10* |
+| **facts** | Support lives or dies on concrete details | fact-carryover: fraction of reference facts (order #s, $, emails, IDs) correctly reproduced | 0.15 |
+| **format** | Is it a sendable email at all | deterministic guardrails: greeting + sign-off present, sensible length | 0.15 |
+| **ROUGE-L / BLEU** | classic surface-overlap metrics | computed & reported for every response — **zero weight**, see the ablation below for why | 0.00 |
 
 Plus a **hallucinated-facts flag**: concrete facts in the candidate that appear
 in *neither* the incoming email *nor* the reference are a safety red-flag and
@@ -158,6 +181,9 @@ orders them correctly. This is exactly the metric's AUC as a good/bad classifier
 `1.0` = perfect, `0.5` = chance. Reported overall **and per degradation type**,
 which shows *what* the metric catches well vs. is blind to.
 
+**1b) Signal ablation.** The same pairwise test run for **each signal alone** vs.
+the composite — this justifies the weighting empirically instead of by assertion.
+
 **2) Convergent validity.** The LLM judge and TF-IDF similarity are *independent*
 mechanisms. If they correlate across responses, they're measuring a real shared
 "quality" construct rather than one signal's artifact. We report Pearson &
@@ -167,11 +193,28 @@ Spearman.
 declines **monotonically** — a metric that ignores growing damage isn't measuring
 quality.
 
+**4) Paraphrase robustness — the case surface metrics fail by construction.**
+Several dataset records carry a hand-authored `paraphrase`: an *equally good*
+reply in completely different words (same facts, same resolution — used only by
+the harness, never for training). A valid metric must score it nearly as high as
+the reference and above every degradation. BLEU/ROUGE-L must crater, because the
+word overlap is gone even though the quality isn't. This is the direct,
+measurable form of "exact match is too strict".
+
 **Results from the offline (`mock`) run in this repo:**
 - Discrimination: **100% pairwise ranking accuracy** (reference ranked above all
   4 degradation types on every ticket). Separation is largest for `generic`
   (+61 pts) and smallest — as expected — for `fact_error` (+21 pts), correctly
   showing fact errors are the *subtlest* degradation to catch.
+- Ablation caveat, reported honestly: on reference-*derived* degradations, even
+  BLEU/ROUGE score 1.0 — corrupting the reference trivially reduces overlap. The
+  degradation test alone can't separate the composite from surface metrics;
+  that's exactly what the paraphrase test is for. ↓
+- **Paraphrase robustness (the decisive test):** score retained on an
+  equally-good rewording — **composite 89%**, judge 93%, fact-carryover 100%,
+  format 100% … **ROUGE-L 39%, BLEU 13%**. And the paraphrase still ranks above
+  100% of degradations. A BLEU/ROUGE-based accuracy system would have flagged
+  perfectly good replies as failures; the composite doesn't.
 - Convergent validity: **Pearson r ≈ 0.91**, Spearman ≈ 0.91 across 50 scored
   points — the two independent signals strongly agree.
 - Sensitivity: **monotonic** (100 → 97 → 93 → 75 → 49 as 0→90% of words are
@@ -194,11 +237,12 @@ score would be the real failure.
 ## Project layout
 ```
 src/dataset.py          build/augment the dataset (the "script that generates it")
-src/retrieval.py        pure-numpy TF-IDF index + cosine (RAG + a scoring signal)
+src/retrieval.py        TF-IDF index + cosine; optional FAISS/embeddings backend
+src/metrics.py          ROUGE-L, BLEU (pure python); optional BERTScore
 src/llm.py              provider abstraction: anthropic | deterministic mock
 src/generate.py         RAG few-shot generator (CLI: single email or batch)
-src/evaluate.py         the accuracy system: per-response + overall scoring
-src/validate_metric.py  proves the metric tracks real quality (3 tests)
+src/evaluate.py         the evaluation engine: per-response + overall scoring
+src/validate_metric.py  proves the metric tracks real quality (4 tests + ablation)
 run_all.sh              end-to-end pipeline
 data/emails.jsonl       the dataset
 outputs/                sample results committed as evidence

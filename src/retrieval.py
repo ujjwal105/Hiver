@@ -72,6 +72,60 @@ class TfidfIndex:
         return out
 
 
+class EmbeddingIndex:
+    """Optional dense retriever: sentence-transformers embeddings + FAISS.
+
+    Activates only if both packages are installed (`pip install
+    sentence-transformers faiss-cpu`). We don't hard-require them: the model
+    download is ~500MB, which would break this repo's "runs anywhere, offline"
+    property, and on a corpus of tens of emails TF-IDF is competitive. On a
+    real inbox (10k+ threads, heavy paraphrase) dense retrieval wins — which is
+    why the interface is identical: swap without touching the generator.
+    """
+
+    def __init__(self, docs: list[str], model_name: str = "all-MiniLM-L6-v2"):
+        from sentence_transformers import SentenceTransformer  # noqa
+        import faiss  # noqa
+        self.docs = docs
+        self._model = SentenceTransformer(model_name)
+        emb = self._model.encode(docs, normalize_embeddings=True)
+        self._faiss = faiss.IndexFlatIP(emb.shape[1])
+        self._faiss.add(emb.astype("float32"))
+
+    def query(self, text: str, k: int = 3, exclude_idx: int | None = None):
+        import numpy as _np
+        q = self._model.encode([text], normalize_embeddings=True).astype("float32")
+        sims, idxs = self._faiss.search(q, min(k + 1, len(self.docs)))
+        out = []
+        for idx, s in zip(idxs[0], sims[0]):
+            if idx == -1 or (exclude_idx is not None and idx == exclude_idx):
+                continue
+            out.append((int(idx), float(s)))
+            if len(out) >= k:
+                break
+        return out
+
+
+def embeddings_available() -> bool:
+    try:
+        import sentence_transformers  # noqa: F401
+        import faiss  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def make_index(docs: list[str], backend: str = "auto"):
+    """backend: 'auto' | 'tfidf' | 'embeddings'."""
+    if backend == "embeddings" or (backend == "auto" and embeddings_available()):
+        try:
+            return EmbeddingIndex(docs), "embeddings+faiss"
+        except Exception:
+            if backend == "embeddings":
+                raise
+    return TfidfIndex(docs), "tfidf"
+
+
 def cosine(a_text: str, b_text: str) -> float:
     """Standalone TF-IDF cosine between two strings (fit on just the pair).
 

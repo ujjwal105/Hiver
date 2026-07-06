@@ -8,34 +8,67 @@
       "truncated": {
         "n": 10,
         "correct": 10,
-        "ref_mean": 98.8,
-        "deg_mean": 51.7,
+        "ref_mean": 97.9,
+        "deg_mean": 53.5,
         "accuracy": 1.0,
-        "separation": 47.1
+        "separation": 44.4
       },
       "generic": {
         "n": 10,
         "correct": 10,
-        "ref_mean": 98.8,
-        "deg_mean": 38.1,
+        "ref_mean": 97.9,
+        "deg_mean": 45.6,
         "accuracy": 1.0,
-        "separation": 60.7
+        "separation": 52.3
       },
       "off_topic": {
         "n": 10,
         "correct": 10,
-        "ref_mean": 98.8,
-        "deg_mean": 57.1,
+        "ref_mean": 97.9,
+        "deg_mean": 64.3,
         "accuracy": 1.0,
-        "separation": 41.7
+        "separation": 33.6
       },
       "fact_error": {
         "n": 10,
         "correct": 10,
-        "ref_mean": 98.8,
-        "deg_mean": 77.3,
+        "ref_mean": 97.9,
+        "deg_mean": 79.7,
         "accuracy": 1.0,
-        "separation": 21.5
+        "separation": 18.2
+      }
+    }
+  },
+  "1b_signal_ablation": {
+    "interpretation": "pairwise ranking accuracy of each signal used ALONE. Justifies the composite: surface metrics (bleu, rouge_l) should rank near-duplicates of the reference above genuinely-good paraphrases and miss fact errors.",
+    "by_signal": {
+      "bleu": {
+        "pairwise_ranking_accuracy": 1.0,
+        "pairs": 40
+      },
+      "composite": {
+        "pairwise_ranking_accuracy": 1.0,
+        "pairs": 40
+      },
+      "fact_carryover": {
+        "pairwise_ranking_accuracy": 0.85,
+        "pairs": 20
+      },
+      "format": {
+        "pairwise_ranking_accuracy": 0.225,
+        "pairs": 40
+      },
+      "quality_judge": {
+        "pairwise_ranking_accuracy": 0.875,
+        "pairs": 40
+      },
+      "rouge_l": {
+        "pairwise_ranking_accuracy": 1.0,
+        "pairs": 40
+      },
+      "similarity_tfidf": {
+        "pairwise_ranking_accuracy": 1.0,
+        "pairs": 40
       }
     }
   },
@@ -53,22 +86,66 @@
       },
       {
         "dropped_frac": 0.25,
-        "score": 97.5
+        "score": 98.3
       },
       {
         "dropped_frac": 0.5,
-        "score": 92.9
+        "score": 95.0
       },
       {
         "dropped_frac": 0.75,
-        "score": 75.3
+        "score": 82.0
       },
       {
         "dropped_frac": 0.9,
-        "score": 48.5
+        "score": 53.3
       }
     ],
     "monotonic_decline": true,
     "interpretation": "score should fall as more of the reply is removed."
+  },
+  "4_paraphrase_robustness": {
+    "n": 4,
+    "per_ticket": [
+      {
+        "id": "043c7c290f",
+        "reference_score": 100.0,
+        "paraphrase_score": 91.4,
+        "paraphrase_rouge_l": 0.3492,
+        "paraphrase_bleu": 0.0969
+      },
+      {
+        "id": "40505cbc6f",
+        "reference_score": 100.0,
+        "paraphrase_score": 85.6,
+        "paraphrase_rouge_l": 0.3667,
+        "paraphrase_bleu": 0.1269
+      },
+      {
+        "id": "aca7822e79",
+        "reference_score": 100.0,
+        "paraphrase_score": 92.9,
+        "paraphrase_rouge_l": 0.4286,
+        "paraphrase_bleu": 0.095
+      },
+      {
+        "id": "4c1145bdfe",
+        "reference_score": 100.0,
+        "paraphrase_score": 86.8,
+        "paraphrase_rouge_l": 0.4108,
+        "paraphrase_bleu": 0.1918
+      }
+    ],
+    "tolerance_by_signal": {
+      "bleu": 0.128,
+      "composite": 0.892,
+      "fact_carryover": 1.0,
+      "format": 1.0,
+      "quality_judge": 0.925,
+      "rouge_l": 0.389,
+      "similarity_tfidf": 0.538
+    },
+    "paraphrase_ranked_above_degradations": 1.0,
+    "interpretation": "tolerance = signal(good paraphrase)/signal(reference); 1.0 means the signal treats an equally-good rewording as equally good. Surface metrics (bleu, rouge_l) should crater here \u2014 that is WHY they get zero weight in the composite."
   }
 }

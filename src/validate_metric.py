@@ -120,17 +120,33 @@ def run(provider=None, data="data/emails.jsonl"):
     # score reference + each degradation for every ticket
     per_ticket = []
     q_signal, sim_signal = [], []  # for convergent validity (all scored items)
+
+    def _signal_values(sc):
+        """Flatten a score_response result into {signal_name: value} for ablation."""
+        vals = {"composite": sc["composite"],
+                "quality_judge": sc["signals"]["quality"],
+                "similarity_tfidf": sc["signals"]["similarity"],
+                "format": sc["signals"]["format"],
+                "rouge_l": sc["diagnostics"]["rouge_l"],
+                "bleu": sc["diagnostics"]["bleu"]}
+        if sc["signals"]["fact_carryover"] is not None:
+            vals["fact_carryover"] = sc["signals"]["fact_carryover"]
+        return vals
+
     for i, r in enumerate(test):
         other = test[(i + 1) % len(test)]["reference"]  # neighbour = off-topic
         ref_score = score_response(r["incoming"], r["reference"], r["reference"], llm)
         entry = {"id": r["id"], "category": r["category"],
-                 "reference": ref_score["composite"], "degraded": {}}
+                 "reference": ref_score["composite"],
+                 "reference_signals": _signal_values(ref_score), "degraded": {},
+                 "degraded_signals": {}}
         q_signal.append(ref_score["signals"]["quality"])
         sim_signal.append(ref_score["signals"]["similarity"])
         for name, fn in DEGRADERS.items():
             cand = fn(r["reference"], other, r["incoming"])
             sc = score_response(r["incoming"], r["reference"], cand, llm)
             entry["degraded"][name] = sc["composite"]
+            entry["degraded_signals"][name] = _signal_values(sc)
             q_signal.append(sc["signals"]["quality"])
             sim_signal.append(sc["signals"]["similarity"])
         per_ticket.append(entry)
@@ -157,10 +173,77 @@ def run(provider=None, data="data/emails.jsonl"):
 
     discrimination = round(pair_correct / pair_total, 3) if pair_total else 0.0
 
+    # 1b) ABLATION: pairwise ranking accuracy of each signal ALONE vs composite.
+    # This is the evidence for the composite's design: surface metrics
+    # (BLEU/ROUGE-L) should underperform, justifying their zero weight.
+    all_signal_names = set()
+    for e in per_ticket:
+        all_signal_names.update(e["reference_signals"].keys())
+    ablation = {}
+    for sig in sorted(all_signal_names):
+        tot, corr = 0, 0
+        for e in per_ticket:
+            good = e["reference_signals"].get(sig)
+            if good is None:
+                continue
+            for name in DEGRADERS:
+                bad = e["degraded_signals"][name].get(sig)
+                if bad is None:
+                    continue
+                tot += 1
+                if good > bad:
+                    corr += 1
+        if tot:
+            ablation[sig] = {"pairwise_ranking_accuracy": round(corr / tot, 3),
+                             "pairs": tot}
+
     # 2) convergent validity
     conv = {"pearson": round(pearson(q_signal, sim_signal), 3),
             "spearman": round(spearman(q_signal, sim_signal), 3),
             "n_points": len(q_signal)}
+
+    # 4) PARAPHRASE ROBUSTNESS — the case surface metrics fail by construction.
+    # Some dataset records carry a hand-authored `paraphrase`: an equally-good
+    # reply in completely different words (same facts, same resolution). A valid
+    # metric must score it HIGH (close to the reference's own score) and above
+    # every degradation; BLEU/ROUGE-L must drop sharply because word overlap is
+    # gone. This is the direct evidence that "exact match is too strict" and
+    # that the composite fixes it.
+    para_rows = [r for r in allrows if r.get("paraphrase")]
+    paraphrase = {"n": len(para_rows), "per_ticket": [], }
+    tol_by_signal: dict[str, list[float]] = {}
+    para_above_degraded = 0
+    para_pairs = 0
+    for i, r in enumerate(para_rows):
+        other = para_rows[(i + 1) % len(para_rows)]["reference"]
+        ref_sc = score_response(r["incoming"], r["reference"], r["reference"], llm)
+        par_sc = score_response(r["incoming"], r["reference"], r["paraphrase"], llm)
+        rv, pv = _signal_values(ref_sc), _signal_values(par_sc)
+        # tolerance ratio per signal: paraphrase score / reference score (1.0 = robust)
+        for sig in rv:
+            if rv[sig] and rv[sig] > 0:
+                tol_by_signal.setdefault(sig, []).append(pv.get(sig, 0.0) / rv[sig])
+        # paraphrase must beat every degradation
+        for name, fn in DEGRADERS.items():
+            cand = fn(r["reference"], other, r["incoming"])
+            deg_sc = score_response(r["incoming"], r["reference"], cand, llm)
+            para_pairs += 1
+            if par_sc["composite"] > deg_sc["composite"]:
+                para_above_degraded += 1
+        paraphrase["per_ticket"].append({
+            "id": r["id"], "reference_score": ref_sc["composite"],
+            "paraphrase_score": par_sc["composite"],
+            "paraphrase_rouge_l": par_sc["diagnostics"]["rouge_l"],
+            "paraphrase_bleu": par_sc["diagnostics"]["bleu"]})
+    paraphrase["tolerance_by_signal"] = {
+        s: round(sum(v)/len(v), 3) for s, v in sorted(tol_by_signal.items())}
+    paraphrase["paraphrase_ranked_above_degradations"] = (
+        round(para_above_degraded / para_pairs, 3) if para_pairs else None)
+    paraphrase["interpretation"] = (
+        "tolerance = signal(good paraphrase)/signal(reference); 1.0 means the "
+        "signal treats an equally-good rewording as equally good. Surface "
+        "metrics (bleu, rouge_l) should crater here — that is WHY they get zero "
+        "weight in the composite.")
 
     # 3) sensitivity: drop increasing fraction of words from a sample reference
     sample = max(test, key=lambda r: len(r["reference"]))
@@ -182,6 +265,13 @@ def run(provider=None, data="data/emails.jsonl"):
             "interpretation": "1.0 = always ranks the good reply above the degraded one; 0.5 = chance.",
             "by_degradation_type": by_type,
         },
+        "1b_signal_ablation": {
+            "interpretation": ("pairwise ranking accuracy of each signal used ALONE. "
+                               "Justifies the composite: surface metrics (bleu, rouge_l) "
+                               "should rank near-duplicates of the reference above "
+                               "genuinely-good paraphrases and miss fact errors."),
+            "by_signal": ablation,
+        },
         "2_convergent_validity": {
             **conv,
             "interpretation": "correlation between two independent signals (LLM judge vs TF-IDF similarity); higher = the score reflects a real shared 'quality' construct.",
@@ -191,6 +281,7 @@ def run(provider=None, data="data/emails.jsonl"):
             "monotonic_decline": monotonic,
             "interpretation": "score should fall as more of the reply is removed.",
         },
+        "4_paraphrase_robustness": paraphrase,
     }
     return report
 

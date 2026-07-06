@@ -21,7 +21,7 @@ CLI:
 from __future__ import annotations
 import argparse, json, os
 from .llm import LLM
-from .retrieval import TfidfIndex
+from .retrieval import make_index
 
 SYSTEM = (
     "You are an experienced customer-support agent working from a shared team "
@@ -40,10 +40,11 @@ def load_dataset(path="data/emails.jsonl"):
 
 
 class Generator:
-    def __init__(self, dataset, provider=None, k=3):
+    def __init__(self, dataset, provider=None, k=3, retriever="auto"):
         self.dataset = dataset
         self.train = [r for r in dataset if r["split"] == "train"]
-        self.index = TfidfIndex([r["incoming"] for r in self.train])
+        self.index, self.retriever_backend = make_index(
+            [r["incoming"] for r in self.train], backend=retriever)
         self.k = k
         self.llm = LLM(provider=provider)
 
@@ -82,12 +83,15 @@ def main():
     ap.add_argument("--data", default="data/emails.jsonl")
     ap.add_argument("--out", default="outputs/generated.jsonl")
     ap.add_argument("--provider", default=None, choices=["anthropic", "mock"])
+    ap.add_argument("--retriever", default="auto", choices=["auto", "tfidf", "embeddings"],
+                    help="embeddings uses sentence-transformers+FAISS if installed")
     ap.add_argument("--k", type=int, default=3)
     args = ap.parse_args()
 
     ds = load_dataset(args.data)
-    gen = Generator(ds, provider=args.provider, k=args.k)
-    print(f"[generate] provider={gen.llm.provider}  train={len(gen.train)}  k={args.k}")
+    gen = Generator(ds, provider=args.provider, k=args.k, retriever=args.retriever)
+    print(f"[generate] provider={gen.llm.provider}  retriever={gen.retriever_backend}  "
+          f"train={len(gen.train)}  k={args.k}")
 
     if args.input:
         res = gen.generate(args.input)

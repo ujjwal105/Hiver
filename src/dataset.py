@@ -30,7 +30,10 @@ CORE = [
     # ---------------- Billing ----------------
     {"category": "billing", "subject": "Charged twice this month",
      "incoming": "Hi, I just checked my card statement and I've been charged $49 twice for my Growth plan this month. My account email is dana@brightloop.io. Can you refund the duplicate charge?",
-     "reference": "Hi Dana,\n\nThanks for flagging this, and sorry for the scare. I looked at the account under dana@brightloop.io and you're right — the Growth plan ($49) was billed twice on the 3rd due to a retry after a temporary gateway error. The first charge is valid; I've refunded the duplicate $49 today, and it should land back on your card in 5–7 business days.\n\nI've also added a note to prevent the retry from double-charging in future. Let me know if you don't see the refund by next week.\n\nBest,\nSam"},
+     "reference": "Hi Dana,\n\nThanks for flagging this, and sorry for the scare. I looked at the account under dana@brightloop.io and you're right — the Growth plan ($49) was billed twice on the 3rd due to a retry after a temporary gateway error. The first charge is valid; I've refunded the duplicate $49 today, and it should land back on your card in 5–7 business days.\n\nI've also added a note to prevent the retry from double-charging in future. Let me know if you don't see the refund by next week.\n\nBest,\nSam",
+     # An equally-good reply in totally different words. Used ONLY by the
+     # metric-validation harness (paraphrase-robustness test) — never for training.
+     "paraphrase": "Hello Dana,\n\nYou're absolutely right, and I apologise — checking dana@brightloop.io I can confirm the Growth subscription was charged $49 two times this month. A payment retry after a brief gateway glitch caused the second charge. I've already sent the duplicate $49 back to your card; banks typically post it within 5–7 business days.\n\nA safeguard is now on your account so a retry can't bill you twice again. Give me a shout if the money hasn't appeared by next week and I'll chase it.\n\nWarm regards,\nSam"},
 
     {"category": "billing", "subject": "Need a VAT invoice",
      "incoming": "Could you send me a proper invoice for our last payment that shows our company VAT number (GB123456789)? Our finance team needs it for the quarter.",
@@ -43,7 +46,8 @@ CORE = [
     # ---------------- Refund ----------------
     {"category": "refund", "subject": "Refund for annual plan bought yesterday",
      "incoming": "I upgraded to the annual plan yesterday by mistake — I meant to stay monthly. Can I get a refund for the annual charge?",
-     "reference": "Hi,\n\nNo problem at all. Since the annual upgrade was less than 24 hours ago and unused, I've fully refunded it ($468) and moved you back to the monthly plan at $49/mo. The refund takes 5–7 business days to appear.\n\nYou're all set on monthly now — no further action needed. Sorry for the mix-up!\n\nBest,\nSam"},
+     "reference": "Hi,\n\nNo problem at all. Since the annual upgrade was less than 24 hours ago and unused, I've fully refunded it ($468) and moved you back to the monthly plan at $49/mo. The refund takes 5–7 business days to appear.\n\nYou're all set on monthly now — no further action needed. Sorry for the mix-up!\n\nBest,\nSam",
+     "paraphrase": "Hey,\n\nEasy fix — because you upgraded under 24 hours ago and hadn't used the annual features, I've reversed the full $468 charge and switched your account back to monthly billing at $49/mo. Expect the money back on your card within 5–7 business days.\n\nNothing more for you to do; apologies for the confusion!\n\nCheers,\nSam"},
 
     {"category": "refund", "subject": "Unhappy, want money back",
      "incoming": "Honestly this hasn't worked for our team and I want a refund for this month. We barely used it.",
@@ -56,7 +60,8 @@ CORE = [
 
     {"category": "technical", "subject": "Getting a 403 when assigning conversations",
      "incoming": "Every time I try to assign a conversation to a teammate I get an error that says '403 forbidden'. I'm an admin. Others on the team can assign fine.",
-     "reference": "Hi,\n\nThanks — the fact that others can assign but you can't points to a permission scope on your specific seat rather than an outage. A 403 here almost always means the Gmail token for your account is missing the delegation scope.\n\nCould you try this: Settings → Connected Accounts → next to your account click \"Reauthorise\", and make sure you tick the \"Manage conversations\" permission on the Google consent screen. That re-grants the scope and clears the 403 in ~90% of cases.\n\nIf it still happens after re-authorising, send me a screenshot of the error and the rough time it occurred and I'll pull the server logs for your account.\n\nBest,\nSam"},
+     "reference": "Hi,\n\nThanks — the fact that others can assign but you can't points to a permission scope on your specific seat rather than an outage. A 403 here almost always means the Gmail token for your account is missing the delegation scope.\n\nCould you try this: Settings → Connected Accounts → next to your account click \"Reauthorise\", and make sure you tick the \"Manage conversations\" permission on the Google consent screen. That re-grants the scope and clears the 403 in ~90% of cases.\n\nIf it still happens after re-authorising, send me a screenshot of the error and the rough time it occurred and I'll pull the server logs for your account.\n\nBest,\nSam",
+     "paraphrase": "Hello,\n\nSince teammates can assign fine while you get the error, this looks like a seat-level permission problem rather than anything system-wide. That 403 nearly always means your Gmail token lacks the delegation scope.\n\nHead to Settings → Connected Accounts, hit \"Reauthorise\" beside your own account, and be sure the \"Manage conversations\" box is ticked on Google's consent screen — re-granting that scope fixes roughly nine in ten of these.\n\nStill blocked afterwards? Reply with a screenshot and roughly when it happened, and I'll dig into the server logs for you.\n\nThanks,\nSam"},
 
     {"category": "technical", "subject": "Notes feature is really slow",
      "incoming": "The internal notes on conversations take like 10 seconds to load lately. It's usable but annoying.",
@@ -124,7 +129,8 @@ CORE = [
     # ---------------- Shipping/order (generic commerce, tests fact-carryover) ----------------
     {"category": "order", "subject": "Where is order #48213?",
      "incoming": "My order #48213 was supposed to arrive Tuesday and it's now Friday. Tracking hasn't updated in 3 days. Getting worried.",
-     "reference": "Hi,\n\nSorry for the worry — a 3-day tracking gap on order #48213 isn't what we want. I checked and the parcel is in transit but stuck at a regional hub, which is why tracking went quiet; it hasn't been lost.\n\nHere's what I've done: I've opened a trace with the carrier and flagged #48213 for priority handling. If it doesn't move within 48 hours, I'll ship a replacement at no cost rather than leave you waiting. I'll update you either way by Monday. Thanks for your patience.\n\nBest,\nSam"},
+     "reference": "Hi,\n\nSorry for the worry — a 3-day tracking gap on order #48213 isn't what we want. I checked and the parcel is in transit but stuck at a regional hub, which is why tracking went quiet; it hasn't been lost.\n\nHere's what I've done: I've opened a trace with the carrier and flagged #48213 for priority handling. If it doesn't move within 48 hours, I'll ship a replacement at no cost rather than leave you waiting. I'll update you either way by Monday. Thanks for your patience.\n\nBest,\nSam",
+     "paraphrase": "Hello,\n\nI completely understand the concern — three days of silence on tracking is unsettling. Good news first: order #48213 isn't lost. It's sitting at a regional carrier hub, which is why the tracking page stopped updating.\n\nI've raised a trace with the carrier and marked #48213 as priority. Should it stay stuck for more than 48 hours, I'll dispatch a free replacement instead of making you wait longer. Either way, you'll hear from me by Monday.\n\nThanks for bearing with us,\nSam"},
 
     {"category": "order", "subject": "Wrong item received",
      "incoming": "I ordered the blue medium hoodie (order #51027) but received a red large. Need the right one before next weekend.",
